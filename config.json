@@ -1,0 +1,19 @@
+{
+  "database": {
+    "type": "mysql",
+    "host": "192.168.2.90",
+    "port": 3306,
+    "db_name": "test",
+    "user": "test",
+    "passwd": "passwd",
+    "charset": "utf8"
+  },
+  "spider": {
+    "index_spider": {
+    },
+    "chapter_spider": {
+    }
+  },
+  "local_file_path": {
+  }
+}

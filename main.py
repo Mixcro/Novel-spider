@@ -133,9 +133,12 @@ def downloadAll(thread_number=8, pageThreadNumber=16):
 
         def run(self):
             nonlocal doList, pool_lock
-            while doList != 0 :
+            while True:
                 with pool_lock:
-                    item = doList.pop(0)
+                    if doList != []:
+                        item = doList.pop(0)
+                    else:
+                        break
                 try:
                     spider = Spider(item)
                     try:
@@ -159,7 +162,7 @@ def downloadAll(thread_number=8, pageThreadNumber=16):
     for i in range(0,thread_number):
         locals()['Download_%s'%i].start()
     for i in range(0,thread_number):
-            locals()['Download_%s'%i].join()
+        locals()['Download_%s'%i].join()
 
 def checkCache():
     '''校验所有本地缓存文件'''
@@ -168,18 +171,50 @@ def checkCache():
     for book in Book.select():
        pool.append((book.id, book.name))
     db.close()
-    for item in pool:
-        id, name = item
-        try:
-            index_name, index_cont_name, index_cont_id = getLocalIndex(id, name)
-            check(id, name, index_name, index_cont_name, index_cont_id)
-            print('  DONE %s_%s '%(id,name))
-        except Exception as e:
-            changeLocalStatus(id, False)
-            print('ERR: %s_%s'%(id, e))
+    pool_lock = threading.Lock()
 
+    class Checker(threading.Thread):
+
+        def __init__(self):
+            threading.Thread.__init__(self)
+
+        def run(self):
+            nonlocal pool, pool_lock
+            while True:
+                with pool_lock:
+                    if pool != []:
+                        item = pool.pop(0)
+                    else:
+                        break
+                id, name = item
+                try:
+                    try:
+                        index_name, index_cont_name, index_cont_id = getLocalIndex(id, name)
+                    except:
+                        print('Local index not found: %s'%id)
+                        spider = Spider(id)
+                        spider.get_index()
+                        index_name, index_cont_name, index_cont_id = getLocalIndex(id, name)
+                    check(id, name, index_name, index_cont_name, index_cont_id)
+                    print('  DONE %s_%s ' % (id, name))
+                except Exception as e:
+                    changeLocalStatus(id, False)
+                    print('ERR: %s_%s' % (id, e))
+
+    for i in range(0, 8):
+        locals()['Thread_%s' % i] = Checker()
+    print('start threads.')
+    for i in range(0, 8):
+        locals()['Thread_%s' % i].start()
+    for i in range(0, 8):
+        locals()['Thread_%s' % i].join()
 
 if __name__ == '__main__':
     print('Hello world!')
-    downloadAll(1, 128)
+    #updateNovel(30)
+    #downloadAll(16, 32)
+    #checkCache()
+
+    spider =Spider(1)
+    spider.get_index()
     print('Bye world!')

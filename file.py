@@ -7,13 +7,26 @@ import json
 import os
 import re
 from copy import deepcopy
-from db import *
+from peewee import *
+
+
+# init from config
+with open('./config.json', 'r') as f:
+    _config = json.load(f)["database"]
+if _config["type"] == "mysql":
+    db = MySQLDatabase(
+         _config["db_name"],
+         user=_config["user"],
+         password=_config["passwd"],
+         host=_config["host"],
+         port=_config["port"],
+         charset=_config["charset"])
 
 
 def addLog(name, content):
-    '''生成本地log文件'''
+    ''' 生成本地log文件 '''
     content = str(content)
-    if os.path.exists('./%s.txt'%name) == False:
+    if os.path.exists('./%s.txt'%name) is False:
         with open('./%s.txt'%name, 'w', encoding='utf-8') as f:
             f.write('%s\n'%content)
     else:
@@ -22,6 +35,13 @@ def addLog(name, content):
 
 def check(bookId, bookName, index_name, index_cont_name, index_cont_id):
     '''本地文件校验，返回未缓存的章节列表'''
+
+    def is_chapter_complete(content):
+        if content == '正在手打中，客官请稍等片刻，内容更新后，需要重新刷新页面，才能获取最新更新！':
+            return False
+        else:
+            return True
+
     index_name, index_cont_name, index_cont_id = (
     deepcopy(index_name), deepcopy(index_cont_name), deepcopy(index_cont_id))
     bindex_name, bindex_cont_name, bindex_cont_id = (
@@ -42,8 +62,9 @@ def check(bookId, bookName, index_name, index_cont_name, index_cont_id):
                     dir_two = [int(x) for x in dir_two]
                     dir_two.sort(reverse=True)
                     for item in dir_two:
-                        index_cont_name[i].pop(item)
-                        index_cont_id[i].pop(item)
+                        if is_chapter_complete(chapter_content[str(item)][1]):
+                            index_cont_name[i].pop(item)
+                            index_cont_id[i].pop(item)
     except Exception as e:
         # 本地文件校验出错，清除已缓存内容
         print('Broken Local Cache: %s_%s: %s'%(bookId, bookName,e))
@@ -61,6 +82,7 @@ def check(bookId, bookName, index_name, index_cont_name, index_cont_id):
                 print('Incomplete Local Cache: %s_%s'%(bookId, bookName))
                 changeLocalStatus(bookId, False)
                 break
+        print(index_cont_id)
         return((index_name, index_cont_name, index_cont_id))
 
 def getLocalIndex(bookId, bookName):
@@ -220,5 +242,37 @@ def changeLocalStatus(id, status=True):
 
 if __name__ == '__main__':
     print('Hello world')
+
+    def check_content(content):
+        te = [
+            '正在手打中，客官请稍等片刻，内容更新后，需要重新刷新页面，才能获取最新更新！'
+        ]
+        if "手打" in content:
+            for _te in te:
+                if _te in content:
+                    return False
+            if len(content) >512:
+                return False
+            return True
+        else:
+            return False
+
+    base_path ='./book'
+    for item in os.listdir(base_path):
+        _path = os.path.join(base_path, item)
+        for sub_item in os.listdir(_path):
+            if sub_item != 'index.json.gz':
+                with gzip.open(os.path.join(_path, sub_item), 'rt', encoding='utf-8') as f:
+                    print(os.path.join(_path, sub_item))
+                    content_dict = json.load(f)
+                for chapter_id in content_dict.keys():
+                    if check_content(content_dict[chapter_id][1]):
+                        print(content_dict[chapter_id][1])
+                        print(len(content_dict[chapter_id][1]))
+                        input('waitting...')
+                    else:
+                        print('pass %s, %s'%(sub_item, chapter_id))
+
+
     print('Bye world')
 
